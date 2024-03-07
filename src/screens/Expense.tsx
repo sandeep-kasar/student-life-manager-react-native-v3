@@ -1,15 +1,68 @@
 import React, { useState } from "react";
-import { StyleSheet, View, TouchableOpacity, SafeAreaView, Text, FlatList, TextInput } from "react-native";
+import { StyleSheet, View, TouchableOpacity, SafeAreaView, Text, FlatList, TextInput, TouchableHighlight, Pressable } from "react-native";
 import Icon from 'react-native-vector-icons/Ionicons';
 import Dialog from "react-native-dialog";
 import { COLORS } from "./Colors";
+import { addMyExpence, getExpenseData } from "../database/MyExpenseOperation";
+import { connectToDatabase } from "../database/Database";
+import { ExpenseData } from "../models/ExpenseData";
+import { ExpenseEntity } from "../models/ExpenseEntity";
+import DatePicker from "react-native-date-picker";
+import Moment from 'moment';
+
 
 const Expense = () => {
 
   const [visible, setVisible] = useState(false);
-  const [textAmout, onChangeTextA] = React.useState('');
-  const [textSpend, onChangeTextS] = React.useState('');
-  const [textNote, onChangeTextN] = React.useState('');
+  const [textAmout, onChangeTextA] = useState('');
+  const [textSpend, onChangeTextS] = useState('');
+  const [textNote, onChangeTextN] = useState('');
+  const [expenseType, setExpenseType] = useState(2);
+  const [expenseViewStyle, setExpenseViewStyle] = useState(styles.dialogExpense);
+  const [expenseTextStyle, setExpenseTextStyle] = useState(styles.dialogExpenseText);
+  const [incomeViewStyle, setIncomeViewStyle] = useState(styles.dialogIncome);
+  const [incomeTextStyle, setIncomeTextStyle] = useState(styles.dialogIncomeText);
+  const [selctedDate, setDate] = useState(new Date())
+  const [open, setOpen] = useState(false)
+
+
+  const onPressExpense = () => {
+    setExpenseViewStyle(styles.dialogExpense)
+    setExpenseTextStyle(styles.dialogExpenseText)
+    setIncomeViewStyle(styles.dialogIncome)
+    setIncomeTextStyle(styles.dialogIncomeText)
+    setExpenseType(2)
+  };
+  const onPressIncome = () => {
+    setExpenseViewStyle(styles.dialogIncome)
+    setExpenseTextStyle(styles.dialogIncomeText)
+    setIncomeViewStyle(styles.dialogExpense)
+    setIncomeTextStyle(styles.dialogExpenseText)
+    setExpenseType(1)
+  };
+
+  // begin database
+
+  const [getMyExpense, setMyExpense] = useState<ExpenseData>();
+  const loadDataCallback = React.useCallback(async () => {
+    try {
+      const db = await connectToDatabase();
+      const myExpenseData = await getExpenseData(db);
+      if (myExpenseData.expenseHeader.balance) {
+        setMyExpense(myExpenseData);
+      } else {
+        setMyExpense({ expenseHeader: { income: 0, expense: 0, balance: 0 }, expenseRow: [] })
+        console.log("getMyExpense===" + getMyExpense?.expenseHeader.balance);
+      }
+    } catch (error) {
+      console.error(error);
+    }
+  }, []);
+  React.useEffect(() => {
+    loadDataCallback();
+  }, [loadDataCallback]);
+
+  // end database
 
   const showDialog = () => {
     setVisible(true);
@@ -19,7 +72,16 @@ const Expense = () => {
     setVisible(false);
   };
 
-  const handleOk = () => {
+  const handleOk = async (textAmout: number, textNote: string, textSpend: string) => {
+    try {
+      const myExpence: ExpenseEntity[] = [{ ex_id: 0, ex_title: textSpend, ex_note: textNote, ex_amount: textAmout, ex_type: expenseType, ex_date: Moment(selctedDate).format('DD MMM YYYY'), ex_month: 2 }]
+      const db = await connectToDatabase();
+      await addMyExpence(db, myExpence);
+      const myExpenseData = await getExpenseData(db);
+      setMyExpense(myExpenseData);
+    } catch (error) {
+      console.error(error);
+    }
     setVisible(false);
   };
 
@@ -40,17 +102,17 @@ const Expense = () => {
         <View style={styles.expenseHeader}>
           <View style={styles.expenseHeaderBox}>
             <Text style={styles.expenseIncome}> Income +</Text>
-            <Text style={styles.expenseIncomeTotal}> &#8377; 10000</Text>
+            <Text style={styles.expenseIncomeTotal}> &#8377; {getMyExpense?.expenseHeader.income}</Text>
           </View>
           <View style={styles.expenseHeaderExpense}></View>
           <View style={styles.expenseHeaderBox}>
             <Text style={styles.expenseIncome}> Expense -</Text>
-            <Text style={styles.expenseTotal}> &#8377; 5000</Text>
+            <Text style={styles.expenseTotal}> &#8377; {getMyExpense?.expenseHeader.expense}</Text>
           </View>
           <View style={styles.expenseHeaderBalance}></View>
           <View style={styles.expenseHeaderBox}>
             <Text style={styles.expenseIncome}> Balance</Text>
-            <Text style={styles.expenseBalance}> &#8377; 5000</Text>
+            <Text style={styles.expenseBalance}> &#8377; {getMyExpense?.expenseHeader.balance}</Text>
           </View>
         </View>
         <View style={styles.expenseHeaderBottom}>
@@ -58,9 +120,9 @@ const Expense = () => {
       </View>
       <View style={styles.expenseList}>
         <FlatList
-          data={DATA}
-          renderItem={({ item }) => <ExpenseItem date={item.date} dayTotal={item.dayTotal} dailyExpenseList={item.dailyExpenseList} />}
-          keyExtractor={item => item.id}
+          data={getMyExpense?.expenseRow}
+          renderItem={({ item }) => <ExpenseItem date={item.expenseDate.date} dayTotal={item.expenseDate.total} dailyExpenseList={item.expenseEntity} />}
+          keyExtractor={item => item.expenseDate.date}
           ItemSeparatorComponent={renderSeparator}
 
         />
@@ -74,11 +136,11 @@ const Expense = () => {
       <Dialog.Container visible={visible} contentStyle={{ paddingTop: 1 }}>
         <View style={{ flexDirection: 'column' }}>
           <View style={{ flexDirection: 'row' }}>
-            <View style={styles.dialogExpense}>
-              <Text style={styles.dialogExpenseText}>Expense</Text>
+          <View style={expenseViewStyle}>
+            <Text style={expenseTextStyle} onPress={onPressExpense}>Expense</Text>
             </View>
-            <View style={styles.dialogIncome}>
-              <Text style={styles.dialogIncomeText}>Income</Text>
+            <View style={incomeViewStyle}>
+            <Text style={incomeTextStyle} onPress={onPressIncome}>Income</Text>
             </View>
           </View>
           <TextInput
@@ -101,17 +163,29 @@ const Expense = () => {
           />
           <View style={styles.dialogDate}>
             <Icon name='calendar' size={30} color={COLORS.inputBottom} />
-            <Text style={styles.dialogDateText}>14 Jan 2024</Text>
+            <Text style={styles.dialogDateText} onPress={() => setOpen(true)}>{Moment(selctedDate).format('DD MMM YYYY')}</Text>
           </View>
         </View>
         <Dialog.Button label="Cancel" onPress={handleCancel} />
-        <Dialog.Button label="Ok" onPress={handleOk} />
+        <Dialog.Button label="Ok" onPress={() => handleOk(Number(textAmout), textNote, textSpend)} />
       </Dialog.Container>
+      <DatePicker
+        modal
+        open={open}
+        date={selctedDate}
+        onConfirm={(date) => {
+          setOpen(false)
+          setDate(date)
+        }}
+        onCancel={() => {
+          setOpen(false)
+        }}
+      />
     </SafeAreaView>
   );
 };
 
-const ExpenseBody = ({ title, total, description }) => (
+const ExpenseBody = ({ title, total, description }: any) => (
   <View style={styles.expenseBody1}>
     <View style={styles.expenseBody2}>
       <Text style={styles.expenseBody2Text}>H</Text>
@@ -128,7 +202,7 @@ const ExpenseBody = ({ title, total, description }) => (
   </View>
 );
 
-const ExpenseItem = ({ date, dayTotal, dailyExpenseList }) => (
+const ExpenseItem = ({ date, dayTotal, dailyExpenseList }: any) => (
   <View style={styles.expenseBodyRow}>
     <View style={styles.expenseBodyRowItemHeader}>
       <Text style={styles.expenseBodyRowItemHeaderDate}>{date}</Text>
@@ -138,8 +212,8 @@ const ExpenseItem = ({ date, dayTotal, dailyExpenseList }) => (
     <View style={styles.expenseBodyRowItemBody}>
       <FlatList
         data={dailyExpenseList}
-        renderItem={({ item }) => <ExpenseBody title={item.title} total={item.total} description={item.description} />}
-        keyExtractor={item => item.id}
+        renderItem={({ item }) => <ExpenseBody title={item.ex_title} total={item.ex_amount} description={item.ex_note} />}
+        keyExtractor={item => item.ex_id}
         ItemSeparatorComponent={renderSeparatorBody}
       />
     </View>
@@ -264,7 +338,6 @@ const styles = StyleSheet.create({
     paddingLeft: 15
   },
   expenseBody3RowAmount: {
-    color: COLORS.black,
     fontSize: 15,
     flex: 1,
     color: COLORS.amount,
@@ -313,6 +386,7 @@ const styles = StyleSheet.create({
   },
   dialogIncome: {
     flex: 1,
+    marginRight: 5,
     height: 35,
     justifyContent: 'center',
     borderColor: COLORS.inputBottom,
@@ -339,7 +413,7 @@ const styles = StyleSheet.create({
   },
   dateSelectetorDateText: {
     fontSize: 18,
-    color:COLORS.white
+    color: COLORS.white
   },
   dateSelectetorNext: {
     flex: 1,
@@ -384,7 +458,7 @@ const styles = StyleSheet.create({
     width: 1,
     backgroundColor: COLORS.headerDivider
   },
-  floatButton:{
+  floatButton: {
     borderWidth: 1,
     borderColor: COLORS.white,
     alignItems: 'center',
