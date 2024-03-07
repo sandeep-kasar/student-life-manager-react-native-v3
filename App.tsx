@@ -8,6 +8,7 @@ import Action from './src/screens/Action';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { Pressable, View, StyleSheet, useColorScheme, SafeAreaView, StatusBar } from 'react-native';
 import { COLORS } from './src/screens/Colors';
+import { connectToDatabase, createTables } from './src/database/Database';
 
 
 const Tab = createBottomTabNavigator();
@@ -25,6 +26,23 @@ const MyTheme = {
 };
 
 function App(): React.JSX.Element {
+
+   // begin database
+
+   const loadDataCallback = React.useCallback(async () => {
+     try {
+       const db = await connectToDatabase();
+       await createTables(db)
+     } catch (error) {
+       console.error(error);
+     }
+   }, []);
+   React.useEffect(() => {
+     loadDataCallback();
+   }, [loadDataCallback]);
+ 
+   // end database
+
   const scheme = useColorScheme();
   return (
     <SafeAreaView style={{ flex: 1 }}>
